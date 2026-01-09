@@ -3,94 +3,68 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>4 images → 3D</title>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+<title>4 images → 3D (live)</title>
 <style>
-  :root{--bg:#0f1724;--panel:#0b1220;--accent:#6ee7b7;--muted:#94a3b8}
-  body{margin:0;font-family:Inter,system-ui,Segoe UI,Roboto,Arial;background:var(--bg);color:#e6eef8}
-  .app{display:flex;height:100vh;gap:18px;padding:18px;box-sizing:border-box}
-  .left{width:360px;background:linear-gradient(180deg,#071025 0%,#071827 100%);border-radius:12px;padding:16px;box-shadow:0 6px 20px rgba(0,0,0,.6)}
-  .right{flex:1;background:linear-gradient(180deg,#071827 0%,#0b1b2b 100%);border-radius:12px;padding:12px;position:relative;overflow:hidden}
-  h2{margin:0 0 12px 0;font-size:16px}
-  .thumb-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-  .thumb{background:#071827;border:2px dashed #123;aspect-ratio:1/1;border-radius:8px;display:flex;align-items:center;justify-content:center;overflow:hidden;position:relative;cursor:pointer}
-  .thumb input{position:absolute;inset:0;opacity:0;cursor:pointer}
-  .thumb img{width:100%;height:100%;object-fit:cover}
-  .controls{margin-top:12px;display:flex;gap:8px;align-items:center}
-  button{background:linear-gradient(90deg,var(--accent),#60a5fa);border:none;padding:10px 12px;border-radius:8px;color:#042;cursor:pointer;font-weight:600}
-  .progress-wrap{margin-top:14px}
-  .progress-bar{height:10px;background:#0b1220;border-radius:999px;overflow:hidden}
-  .progress-fill{height:100%;width:0%;background:linear-gradient(90deg,#6ee7b7,#60a5fa);transition:width .3s}
-  .progress-text{margin-top:6px;color:var(--muted);font-size:13px}
-  #viewer{width:100%;height:100%;display:block;border-radius:8px;background:linear-gradient(180deg,#071827,#02101a)}
-  .overlay{position:absolute;left:18px;top:18px;color:#cfeef0}
-  .overlay .status{background:rgba(0,0,0,.35);padding:8px 12px;border-radius:8px}
-  .controls-bottom{position:absolute;right:18px;bottom:18px;display:flex;gap:8px}
-  .small-btn{padding:8px 10px;border-radius:8px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.04);color:#e6eef8;cursor:pointer}
+  body{margin:0;font-family:Arial;background:#071827;color:#e6eef8}
+  .app{display:flex;height:100vh}
+  .left{width:360px;padding:16px}
+  .thumb{width:48%;display:inline-block;height:120px;background:#0b1220;margin:1%;border-radius:8px;overflow:hidden;position:relative}
+  .thumb input{position:absolute;inset:0;opacity:0}
+  button{padding:10px;border-radius:8px;border:none;background:#60a5fa;color:#042;cursor:pointer}
+  .progress-bar{height:12px;background:#0b1220;border-radius:999px;overflow:hidden;margin-top:12px}
+  .progress-fill{height:100%;width:0%;background:linear-gradient(90deg,#6ee7b7,#60a5fa);transition:width .2s}
+  .viewer{flex:1;position:relative}
+  canvas{width:100%;height:100%;display:block}
+  .status{position:absolute;left:16px;top:16px;background:rgba(0,0,0,0.35);padding:8px;border-radius:8px}
 </style>
 </head>
 <body>
 <div class="app">
   <div class="left">
-    <h2>Image to 3D — 4 images</h2>
-    <div class="thumb-grid">
-      <label class="thumb" id="thumb-0"><input type="file" accept="image/*" data-index="0"><span class="placeholder">+</span></label>
-      <label class="thumb" id="thumb-1"><input type="file" accept="image/*" data-index="1"><span class="placeholder">+</span></label>
-      <label class="thumb" id="thumb-2"><input type="file" accept="image/*" data-index="2"><span class="placeholder">+</span></label>
-      <label class="thumb" id="thumb-3"><input type="file" accept="image/*" data-index="3"><span class="placeholder">+</span></label>
+    <h3>Image to 3D — 4 images</h3>
+    <div id="thumbs">
+      <label class="thumb"><input type="file" data-index="0"></label>
+      <label class="thumb"><input type="file" data-index="1"></label>
+      <label class="thumb"><input type="file" data-index="2"></label>
+      <label class="thumb"><input type="file" data-index="3"></label>
     </div>
-
-    <div class="controls">
+    <div style="margin-top:12px">
       <button id="generateBtn">Générer 3D</button>
-      <button id="gradientBtn" class="small-btn">Générer en dégradé</button>
+      <button id="gradientBtn">Dégradé</button>
     </div>
-
-    <div class="progress-wrap">
-      <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
-      <div class="progress-text" id="progressText">Prêt</div>
-    </div>
-
-    <div style="margin-top:12px;color:var(--muted);font-size:13px">
-      <div><strong>PBR</strong> : false</div>
-      <div><strong>Texture</strong> : 1024</div>
-      <div><strong>Mesh fidelity</strong> : Standard</div>
-    </div>
+    <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+    <div id="progressText" style="margin-top:8px;color:#9fb6c0">Prêt</div>
   </div>
 
-  <div class="right">
-    <canvas id="viewer"></canvas>
-    <div class="overlay">
-      <div class="status" id="statusBox">Aucun job en cours</div>
-    </div>
-    <div class="controls-bottom">
-      <button id="colorCycle" class="small-btn">Activer couleur</button>
-      <button id="downloadBtn" class="small-btn">Télécharger GLB</button>
-    </div>
+  <div class="viewer">
+    <canvas id="viewerCanvas"></canvas>
+    <div class="status" id="statusBox">Aucun job</div>
   </div>
 </div>
 
+<!-- libs -->
 <script src="https://cdn.jsdelivr.net/npm/three@0.154.0/build/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.154.0/examples/js/controls/OrbitControls.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.154.0/examples/js/loaders/GLTFLoader.js"></script>
 <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
 
 <script>
-/* CONFIG : remplacez par l'URL de votre backend (Render, Fly, etc.) */
-const SOCKET_URL = 'https://https-image-to-3d.onrender.com'; // <-- remplacer avant déploiement
+/* CONFIG : remplacez par l'URL publique de votre backend Render si nécessaire */
+const SOCKET_URL = (typeof SOCKET_URL !== 'undefined' && SOCKET_URL) ? SOCKET_URL : location.origin;
 
-/* UI & upload */
 const thumbs = Array.from(document.querySelectorAll('.thumb'));
-const files = [null,null,null,null];
+const files = [null, null, null, null];
 thumbs.forEach((el, i) => {
   const input = el.querySelector('input');
   input.addEventListener('change', e => {
     const f = e.target.files[0];
-    if(!f) return;
+    if (!f) return;
     files[i] = f;
     const img = document.createElement('img');
     img.src = URL.createObjectURL(f);
-    el.innerHTML = '';
-    el.appendChild(img);
+    img.style.width = '100%'; img.style.height = '100%'; img.style.objectFit = 'cover';
+    el.innerHTML = ''; el.appendChild(img);
+    el.appendChild(input);
   });
 });
 
@@ -98,140 +72,134 @@ const socket = io(SOCKET_URL, { transports: ['websocket','polling'] });
 const statusBox = document.getElementById('statusBox');
 const progressFill = document.getElementById('progressFill');
 const progressText = document.getElementById('progressText');
-const generateBtn = document.getElementById('generateBtn');
-const gradientBtn = document.getElementById('gradientBtn');
-const colorCycleBtn = document.getElementById('colorCycle');
-const downloadBtn = document.getElementById('downloadBtn');
-
 let currentJobId = null;
-generateBtn.addEventListener('click', ()=>startJob(false));
-gradientBtn.addEventListener('click', ()=>startJob(true));
 
-function startJob(useGradient=false){
-  const present = files.filter(Boolean).length;
-  if(present < 4){ alert('Veuillez sélectionner 4 images.'); return; }
-  const fd = new FormData();
-  files.forEach((f,i)=>fd.append('image'+i,f));
-  fd.append('gradient', useGradient ? '1' : '0');
-  fetch(SOCKET_URL + '/api/start-job',{method:'POST',body:fd})
-    .then(r=>r.json())
-    .then(data=>{
-      currentJobId = data.jobId;
-      statusBox.textContent = 'Job lancé: ' + currentJobId;
-      progressText.textContent = '0%';
-      progressFill.style.width = '0%';
-    }).catch(err=>{ alert('Erreur démarrage job'); console.error(err); });
-}
-
-/* Socket events */
-socket.on('connect', ()=>console.log('socket connected'));
-socket.on('job.progress', payload=>{
-  if(payload.jobId !== currentJobId) return;
+socket.on('connect', () => console.log('socket connected', socket.id));
+socket.on('connect_error', err => console.error('socket connect_error', err));
+socket.on('job.progress', payload => {
+  console.log('job.progress', payload);
+  if (currentJobId && payload.jobId !== currentJobId) return;
+  // Mettre à jour la barre
   progressFill.style.width = payload.percent + '%';
   progressText.textContent = payload.percent + '% — ' + payload.message;
-  if(payload.partialModelUrl) loadModel(SOCKET_URL + payload.partialModelUrl);
+  statusBox.textContent = payload.message;
+  // Charger partial si fourni
+  if (payload.partialModelUrl) {
+    const url = payload.partialModelUrl.startsWith('http') ? payload.partialModelUrl : SOCKET_URL + payload.partialModelUrl;
+    loadModel(url, true); // true = partial (fade)
+  }
 });
-socket.on('job.finished', payload=>{
-  if(payload.jobId !== currentJobId) return;
+socket.on('job.finished', payload => {
+  console.log('job.finished', payload);
+  if (currentJobId && payload.jobId !== currentJobId) return;
   progressFill.style.width = '100%';
   progressText.textContent = 'Terminé';
   statusBox.textContent = 'Terminé';
-  if(payload.modelUrl) loadModel(SOCKET_URL + payload.modelUrl);
-  downloadBtn.onclick = ()=>{ window.open(SOCKET_URL + payload.modelUrl,'_blank'); };
+  if (payload.modelUrl) {
+    const url = payload.modelUrl.startsWith('http') ? payload.modelUrl : SOCKET_URL + payload.modelUrl;
+    loadModel(url, false);
+  }
+  currentJobId = null;
 });
 
+document.getElementById('generateBtn').addEventListener('click', startJob);
+
+function startJob() {
+  const present = files.filter(Boolean).length;
+  if (present < 4) { alert('Veuillez sélectionner 4 images'); return; }
+  const fd = new FormData();
+  files.forEach((f, i) => fd.append('image' + i, f));
+  fetch(SOCKET_URL + '/api/start-job', { method: 'POST', body: fd })
+    .then(r => r.json())
+    .then(data => {
+      if (data.error) { alert(data.error); return; }
+      currentJobId = data.jobId;
+      statusBox.textContent = 'Job lancé: ' + currentJobId;
+      progressFill.style.width = '0%';
+      progressText.textContent = '0% — Démarrage';
+    }).catch(err => { console.error(err); alert('Erreur démarrage job'); });
+}
+
 /* Three.js viewer */
-const canvas = document.getElementById('viewer');
-const renderer = new THREE.WebGLRenderer({canvas, antialias:true, alpha:true});
+const canvas = document.getElementById('viewerCanvas');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
 renderer.setPixelRatio(window.devicePixelRatio);
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x071827);
-const camera = new THREE.PerspectiveCamera(45,2,0.1,1000);
-camera.position.set(0,1.2,2.5);
+const camera = new THREE.PerspectiveCamera(45, 2, 0.1, 1000);
+camera.position.set(0, 1.2, 2.5);
 const controls = new THREE.OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
-controls.target.set(0,0.8,0);
+controls.target.set(0, 0.8, 0);
 
-const hemi = new THREE.HemisphereLight(0xffffff,0x444444,0.8);
-scene.add(hemi);
-const dir = new THREE.DirectionalLight(0xffffff,0.8);
-dir.position.set(5,10,7);
-scene.add(dir);
+const hemi = new THREE.HemisphereLight(0xffffff, 0x444444, 0.8); scene.add(hemi);
+const dir = new THREE.DirectionalLight(0xffffff, 0.8); dir.position.set(5, 10, 7); scene.add(dir);
 
-let currentMesh = null;
-function clearMesh(){
-  if(currentMesh){ scene.remove(currentMesh); currentMesh.traverse && currentMesh.traverse(c=>{ if(c.geometry) c.geometry.dispose(); if(c.material) c.material.dispose(); }); currentMesh = null; }
-}
-function loadModel(url){
-  clearMesh();
-  const ext = url.split('.').pop().toLowerCase();
-  if(ext === 'glb' || ext === 'gltf'){
-    const loader = new THREE.GLTFLoader();
-    loader.load(url, gltf=>{
-      currentMesh = gltf.scene;
-      currentMesh.traverse(c=>{ if(c.isMesh){ c.castShadow=true; c.receiveShadow=true; c.material = c.material.clone(); }});
-      scene.add(currentMesh);
-    }, undefined, err=>console.error(err));
-  } else {
-    const geo = new THREE.TorusKnotGeometry(0.6,0.18,200,32);
-    const mat = new THREE.MeshStandardMaterial({color:0x88ccff,metalness:0.2,roughness:0.6});
-    currentMesh = new THREE.Mesh(geo,mat);
-    scene.add(currentMesh);
-  }
-}
+let currentModel = null;
+let partialFadeTimeout = null;
 
-/* color cycling */
-let colorCycle = false;
-colorCycleBtn.addEventListener('click', ()=>{
-  colorCycle = !colorCycle;
-  colorCycleBtn.textContent = colorCycle ? 'Désactiver couleur' : 'Activer couleur';
-});
-function animateColor(time){
-  if(!currentMesh || !colorCycle) return;
-  const hue = (time * 0.00005) % 1;
-  currentMesh.traverse(c=>{
-    if(c.isMesh && c.material){
-      const col = new THREE.Color().setHSL(hue,0.6,0.5);
-      c.material.color.lerp(col,0.08);
-      c.material.needsUpdate = true;
+function clearModel() {
+  if (!currentModel) return;
+  scene.remove(currentModel);
+  currentModel.traverse && currentModel.traverse(c => {
+    if (c.geometry) c.geometry.dispose();
+    if (c.material) {
+      if (Array.isArray(c.material)) c.material.forEach(m => m.dispose && m.dispose());
+      else c.material.dispose && c.material.dispose();
     }
   });
+  currentModel = null;
 }
 
-/* gradient application (applique au mesh courant) */
-gradientBtn.addEventListener('click', ()=>{
-  if(!currentMesh) return;
-  currentMesh.traverse(c=>{
-    if(c.isMesh){
-      const mat = new THREE.MeshStandardMaterial({vertexColors:false,metalness:0.1,roughness:0.6});
-      const cvs = document.createElement('canvas'); cvs.width=512; cvs.height=512;
-      const ctx = cvs.getContext('2d');
-      const g = ctx.createLinearGradient(0,0,512,512);
-      g.addColorStop(0,'#6ee7b7'); g.addColorStop(1,'#60a5fa');
-      ctx.fillStyle = g; ctx.fillRect(0,0,512,512);
-      const tex = new THREE.CanvasTexture(cvs);
-      mat.map = tex; mat.map.needsUpdate = true;
-      c.material = mat;
+function loadModel(url, isPartial = false) {
+  // Si même URL déjà chargé, ignorer
+  if (currentModel && currentModel.userData && currentModel.userData.url === url) return;
+  const loader = new THREE.GLTFLoader();
+  loader.load(url, gltf => {
+    // fade: si partial, on remplace progressivement l'ancien par le nouveau
+    const newModel = gltf.scene;
+    newModel.userData = { url };
+    newModel.traverse(c => { if (c.isMesh) { c.castShadow = true; c.receiveShadow = true; c.material = c.material.clone(); c.material.transparent = true; c.material.opacity = 0.0; }});
+    scene.add(newModel);
+
+    // animation de fondu
+    const duration = isPartial ? 600 : 400;
+    const start = performance.now();
+    function fadeStep(t) {
+      const p = Math.min(1, (t - start) / duration);
+      newModel.traverse(c => { if (c.isMesh) c.material.opacity = p; });
+      if (p < 1) requestAnimationFrame(fadeStep);
+      else {
+        // une fois le nouveau complètement visible, supprimer l'ancien
+        if (currentModel && currentModel !== newModel) {
+          scene.remove(currentModel);
+        }
+        currentModel = newModel;
+      }
     }
+    requestAnimationFrame(fadeStep);
+  }, xhr => {
+    // progression de téléchargement du GLB (optionnel)
+  }, err => {
+    console.error('GLTF load error', err);
   });
-});
+}
 
 /* render loop */
-function resize(){
+function resize() {
   const w = canvas.clientWidth, h = canvas.clientHeight;
-  if(canvas.width !== w * devicePixelRatio || canvas.height !== h * devicePixelRatio){
-    renderer.setSize(w,h,false);
-    camera.aspect = w/h; camera.updateProjectionMatrix();
+  if (canvas.width !== w * devicePixelRatio || canvas.height !== h * devicePixelRatio) {
+    renderer.setSize(w, h, false);
+    camera.aspect = w / h; camera.updateProjectionMatrix();
   }
 }
-function render(t){
+function animate(t) {
   resize();
   controls.update();
-  animateColor(t);
-  renderer.render(scene,camera);
-  requestAnimationFrame(render);
+  renderer.render(scene, camera);
+  requestAnimationFrame(animate);
 }
-requestAnimationFrame(render);
+requestAnimationFrame(animate);
 </script>
 </body>
 </html>
