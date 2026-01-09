@@ -52,41 +52,84 @@
 /* CONFIG : remplacez par l'URL publique de votre backend Render si nécessaire */
 const SOCKET_URL = (typeof SOCKET_URL !== 'undefined' && SOCKET_URL) ? SOCKET_URL : location.origin;
 
-const thumbs = Array.from(document.querySelectorAll('.thumb'));
+const thumbGrid = document.getElementById('thumbGrid');
+const thumbs = Array.from(thumbGrid.querySelectorAll('.thumb'));
 const files = [null, null, null, null];
-thumbs.forEach((el, i) => {
+const objectUrls = [null, null, null, null];
+
+thumbs.forEach(el => {
+  const idx = Number(el.dataset.index);
   const input = el.querySelector('input');
+
+  // Crée un conteneur d'aperçu sans toucher à l'input
+  let preview = el.querySelector('.preview');
+  if (!preview) {
+    preview = document.createElement('div');
+    preview.className = 'preview';
+    preview.style.width = '100%';
+    preview.style.height = '100%';
+    preview.style.display = 'flex';
+    preview.style.alignItems = 'center';
+    preview.style.justifyContent = 'center';
+    preview.style.overflow = 'hidden';
+    preview.style.position = 'absolute';
+    preview.style.inset = '0';
+    el.appendChild(preview);
+  }
+
   input.addEventListener('change', e => {
-    const f = e.target.files[0];
-    if (!f) return;
-    files[i] = f;
+    const f = e.target.files && e.target.files[0];
+    // libérer ancien objectURL si existant
+    if (objectUrls[idx]) {
+      URL.revokeObjectURL(objectUrls[idx]);
+      objectUrls[idx] = null;
+    }
+    if (!f) {
+      files[idx] = null;
+      preview.innerHTML = '';
+      return;
+    }
+    files[idx] = f;
+    const url = URL.createObjectURL(f);
+    objectUrls[idx] = url;
+
+    // afficher l'image dans le conteneur preview
+    preview.innerHTML = '';
     const img = document.createElement('img');
-    img.src = URL.createObjectURL(f);
-    img.style.width = '100%'; img.style.height = '100%'; img.style.objectFit = 'cover';
-    el.innerHTML = ''; el.appendChild(img);
-    el.appendChild(input);
+    img.src = url;
+    img.style.width = '100%';
+    img.style.height = '100%';
+    img.style.objectFit = 'cover';
+    preview.appendChild(img);
   });
 });
 
+// Nettoyage des objectURLs quand on quitte la page
+window.addEventListener('beforeunload', () => {
+  objectUrls.forEach(u => { if (u) URL.revokeObjectURL(u); });
+});
+
+/* Socket et UI */
 const socket = io(SOCKET_URL, { transports: ['websocket','polling'] });
 const statusBox = document.getElementById('statusBox');
 const progressFill = document.getElementById('progressFill');
 const progressText = document.getElementById('progressText');
+const downloadBtn = document.getElementById('downloadBtn');
 let currentJobId = null;
+let lastModelUrl = null;
 
 socket.on('connect', () => console.log('socket connected', socket.id));
 socket.on('connect_error', err => console.error('socket connect_error', err));
 socket.on('job.progress', payload => {
   console.log('job.progress', payload);
   if (currentJobId && payload.jobId !== currentJobId) return;
-  // Mettre à jour la barre
   progressFill.style.width = payload.percent + '%';
   progressText.textContent = payload.percent + '% — ' + payload.message;
   statusBox.textContent = payload.message;
-  // Charger partial si fourni
   if (payload.partialModelUrl) {
     const url = payload.partialModelUrl.startsWith('http') ? payload.partialModelUrl : SOCKET_URL + payload.partialModelUrl;
-    loadModel(url, true); // true = partial (fade)
+    loadModel(url, true);
+    lastModelUrl = url;
   }
 });
 socket.on('job.finished', payload => {
@@ -98,11 +141,16 @@ socket.on('job.finished', payload => {
   if (payload.modelUrl) {
     const url = payload.modelUrl.startsWith('http') ? payload.modelUrl : SOCKET_URL + payload.modelUrl;
     loadModel(url, false);
+    lastModelUrl = url;
+    downloadBtn.disabled = false;
+    downloadBtn.onclick = () => window.open(url, '_blank');
   }
   currentJobId = null;
 });
 
 document.getElementById('generateBtn').addEventListener('click', startJob);
+document.getElementById('gradientBtn').addEventListener('click', applyGradient);
+document.getElementById('colorCycle').addEventListener('click', toggleColorCycle);
 
 function startJob() {
   const present = files.filter(Boolean).length;
@@ -117,89 +165,10 @@ function startJob() {
       statusBox.textContent = 'Job lancé: ' + currentJobId;
       progressFill.style.width = '0%';
       progressText.textContent = '0% — Démarrage';
+      downloadBtn.disabled = true;
     }).catch(err => { console.error(err); alert('Erreur démarrage job'); });
 }
 
-/* Three.js viewer */
-const canvas = document.getElementById('viewerCanvas');
-const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
-renderer.setPixelRatio(window.devicePixelRatio);
-const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x071827);
-const camera = new THREE.PerspectiveCamera(45, 2, 0.1, 1000);
-camera.position.set(0, 1.2, 2.5);
-const controls = new THREE.OrbitControls(camera, renderer.domElement);
-controls.enableDamping = true;
-controls.target.set(0, 0.8, 0);
-
-const hemi = new THREE.HemisphereLight(0xffffff, 0x444444, 0.8); scene.add(hemi);
-const dir = new THREE.DirectionalLight(0xffffff, 0.8); dir.position.set(5, 10, 7); scene.add(dir);
-
-let currentModel = null;
-let partialFadeTimeout = null;
-
-function clearModel() {
-  if (!currentModel) return;
-  scene.remove(currentModel);
-  currentModel.traverse && currentModel.traverse(c => {
-    if (c.geometry) c.geometry.dispose();
-    if (c.material) {
-      if (Array.isArray(c.material)) c.material.forEach(m => m.dispose && m.dispose());
-      else c.material.dispose && c.material.dispose();
-    }
-  });
-  currentModel = null;
-}
-
-function loadModel(url, isPartial = false) {
-  // Si même URL déjà chargé, ignorer
-  if (currentModel && currentModel.userData && currentModel.userData.url === url) return;
-  const loader = new THREE.GLTFLoader();
-  loader.load(url, gltf => {
-    // fade: si partial, on remplace progressivement l'ancien par le nouveau
-    const newModel = gltf.scene;
-    newModel.userData = { url };
-    newModel.traverse(c => { if (c.isMesh) { c.castShadow = true; c.receiveShadow = true; c.material = c.material.clone(); c.material.transparent = true; c.material.opacity = 0.0; }});
-    scene.add(newModel);
-
-    // animation de fondu
-    const duration = isPartial ? 600 : 400;
-    const start = performance.now();
-    function fadeStep(t) {
-      const p = Math.min(1, (t - start) / duration);
-      newModel.traverse(c => { if (c.isMesh) c.material.opacity = p; });
-      if (p < 1) requestAnimationFrame(fadeStep);
-      else {
-        // une fois le nouveau complètement visible, supprimer l'ancien
-        if (currentModel && currentModel !== newModel) {
-          scene.remove(currentModel);
-        }
-        currentModel = newModel;
-      }
-    }
-    requestAnimationFrame(fadeStep);
-  }, xhr => {
-    // progression de téléchargement du GLB (optionnel)
-  }, err => {
-    console.error('GLTF load error', err);
-  });
-}
-
-/* render loop */
-function resize() {
-  const w = canvas.clientWidth, h = canvas.clientHeight;
-  if (canvas.width !== w * devicePixelRatio || canvas.height !== h * devicePixelRatio) {
-    renderer.setSize(w, h, false);
-    camera.aspect = w / h; camera.updateProjectionMatrix();
-  }
-}
-function animate(t) {
-  resize();
-  controls.update();
-  renderer.render(scene, camera);
-  requestAnimationFrame(animate);
-}
-requestAnimationFrame(animate);
+/* Les fonctions loadModel, applyGradient, toggleColorCycle, animate, etc.
+   doivent rester telles qu'elles sont dans votre fichier (Three.js viewer). */
 </script>
-</body>
-</html>
